@@ -1,0 +1,38 @@
+name: 1. EXTRAER CLAVE REAL
+on: workflow_dispatch
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Instalar y Extraer
+        run: |
+          # 1. Descargamos Playit
+          curl -Lo playit https://github.com/playit-cloud/playit-agent/releases/latest/download/playit-linux-amd64
+          chmod +x playit
+          
+          echo "Iniciando Playit..."
+          
+          # 2. Lo ejecutamos en segundo plano y guardamos lo que dice en 'playit.log'
+          ./playit > playit.log 2>&1 &
+          
+          # Le damos 10 segundos para que genere el link
+          sleep 10
+          
+          echo "---------------------------------------------------------"
+          echo "👉 CLICA ESTE LINK AHORA PARA VINCULAR TU CUENTA:"
+          # Buscamos el link dentro del log
+          grep -o 'https://playit.gg/claim/[a-zA-Z0-9]*' playit.log
+          echo "---------------------------------------------------------"
+          
+          echo "⏳ Tienes 2 minutos para abrir el link en tu navegador y aceptar."
+          echo "Esperando..."
+          sleep 120
+          
+          echo "---------------------------------------------------------"
+          echo "🔑 AQUÍ ESTÁ TU CLAVE SECRETA (SECRET KEY):"
+          # Tras vincularlo, Playit crea este archivo. Aquí leemos la clave.
+          cat ~/.config/playit/playit.toml || echo "❌ No se encontró el archivo. ¿Clicaste el link a tiempo?"
+          echo "---------------------------------------------------------"
+          
+          # Apagamos el programa para terminar
+          pkill playit
