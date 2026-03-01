@@ -1,0 +1,86 @@
+name: VPS LINUX TOTAL + PLAYIT + LOOP
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write # Permiso necesario para que el script pueda reiniciarse a sí mismo
+
+jobs:
+  vps-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: "1. Descargar el contenido del repositorio"
+        uses: actions/checkout@v4
+
+      - name: "2. Instalar Tailscale y CONFIGURAR USUARIO"
+        run: |
+          # Poner la contraseña 'runnerpass' al usuario 'runner'
+          echo "runner:runnerpass" | sudo chpasswd
+          
+          # Quitar la barra verde molesta de Tmate
+          echo "set -g status off" >> /home/runner/.tmate.conf
+          
+          # Instalar Tailscale
+          curl -fsSL https://tailscale.com/install.sh | sh
+          
+          # Conectar a Tailscale usando TU AuthKey.
+          # (Le añadí '--ssh' para que acepte conexiones SSH nativas directamente sin llaves raras)
+          sudo tailscale up --authkey=tskey-auth-kCxCNvJST811CNTRL-XTonMx8eTw3YNvyQgS7Vw3vJvFpcVmSG --hostname=github-vps --ssh
+          
+          echo "--------------------------------------------------------------------"
+          echo "✅ CONEXIÓN POR TAILSCALE LISTA:"
+          echo "ssh runner@$(tailscale ip -4)"
+          echo "CONTRASEÑA: runnerpass"
+          echo "--------------------------------------------------------------------"
+
+      - name: "3. Iniciar Tmate en Segundo Plano (Respaldo SSH)"
+        run: |
+          # Instalamos tmate a mano para que no bloquee el script
+          sudo apt-get update && sudo apt-get install -y tmate
+          
+          # Generamos una llave rápida si no existe
+          ssh-keygen -t rsa -f ~/.ssh/id_rsa -q -N ""
+          
+          # Arrancamos Tmate en el fondo
+          tmate -S /tmp/tmate.sock new-session -d
+          tmate -S /tmp/tmate.sock wait tmate-ready
+          
+          echo "--------------------------------------------------------------------"
+          echo "✅ TMATE LISTO (Úsalo si Tailscale falla):"
+          tmate -S /tmp/tmate.sock display -p '#{tmate_ssh}'
+          echo "--------------------------------------------------------------------"
+
+      - name: "4. Iniciar Túnel Playit (Puertos Exposición)"
+        run: |
+          # Playit corre en Docker en el fondo con tu llave maestra.
+          # Cualquier cosa que instales en la VPS en los puertos configurados en la web,
+          # Playit lo sacará a Internet.
+          docker run -d \
+            --name=playit \
+            --net=host \
+            --restart unless-stopped \
+            -e SECRET_KEY=6d0615844adfcc7f2bd89a75d44504c48aaab7c23c0ca4aa1ead3e3ac665a8b7 \
+            ghcr.io/playit-cloud/playit-agent:0.17
+            
+          echo "✅ Playit en línea. Todo lo que abras en Linux, Playit lo transmitirá."
+
+      - name: "5. Bucle de Relevo Automático"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "VPS Totalmente tuya. Tienes 5 horas y 45 minutos antes del relevo."
+          
+          # Esperar casi las 6 horas
+          sleep 20700
+          
+          echo "⏰ Tiempo límite acercándose. Lanzando clon para mantener la red viva..."
+          
+          # ⚠️ RECUERDA CAMBIAR 'main.yml' POR EL NOMBRE DE ESTE ARCHIVO SI ES DISTINTO
+          gh workflow run "main.yml" --ref main
+          
+          # Dar tiempo al clon para arrancar
+          sleep 600
