@@ -1,0 +1,52 @@
+name: VPS ETERNA PLAYIT
+
+on:
+  workflow_dispatch: # Lo inicias manual la primera vez
+
+jobs:
+  vps-session:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: "1. Iniciar Webtop (14GB RAM)"
+        run: |
+          docker run -d \
+            --name=webtop \
+            --security-opt seccomp=unconfined \
+            -e PUID=1000 -e PGID=1000 \
+            -e TZ=America/Caracas \
+            -p 3000:3000 \
+            -p 12345:12345/udp \
+            --memory="14g" \
+            --shm-size="4gb" \
+            lscr.io/linuxserver/webtop:ubuntu-xfce
+            
+          echo "✅ Webtop arrancando..."
+          sleep 5
+
+      - name: "2. Iniciar Túnel Playit (Comando Oficial)"
+        run: |
+          # Arrancamos Playit con tu comando exacto (usando -d para segundo plano)
+          docker run -d \
+            --name=playit \
+            --net=host \
+            -e SECRET_KEY=6d0615844adfcc7f2bd89a75d44504c48aaab7c23c0ca4aa1ead3e3ac665a8b7 \
+            ghcr.io/playit-cloud/playit-agent:0.17
+            
+          echo "✅ Playit conectado automáticamente."
+          echo "🌐 Tu VPS ya está en línea en la IP de tu panel de Playit."
+
+      - name: "3. Relevo Automático (Bucle de 6 horas)"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Todo funcionando. Esperando 5 horas y 45 minutos..."
+          sleep 20700 
+          
+          echo "⏰ Tiempo de relevo, lanzando nueva máquina..."
+          # ⚠️ IMPORTANTE: Si tu archivo no se llama "main.yml", cambia el nombre aquí abajo
+          gh workflow run "main.yml" --ref main
+          
+          # Esperamos 10 minutos para que la nueva máquina tome el control sin cortes
+          sleep 600
